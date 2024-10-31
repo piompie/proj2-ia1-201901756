@@ -1,0 +1,427 @@
+<html>
+    <head>
+        <title>Proyecto 2 IA - 20191756</title>
+        <script type="text/javascript" src="https://tytusdb.github.io/tytusjs/dist/tytus.js"></script>
+        <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+        table {
+            max-height: 300px;
+            overflow-y: scroll; 
+            overflow-x: scroll;
+        }
+        form {
+            display: flex;
+            gap: 1em; 
+            align-items: center;
+            padding: 10px;
+        }
+
+        #selectors form select,
+        #selectors form button{
+            min-width: 150px; 
+        }
+
+        .result {
+            display: none;
+        }
+
+        .result.active {
+            display: block;
+        }
+        </style>
+    </head>
+
+    <body>
+        <h1>Proyecto 2 IA</h1>
+        <form class="form-group">
+            <div>
+                <label for="csv">Seleccionar Archivo:</label>
+                <input type="file" id="csv" accept=".csv" required/>
+            </div>
+            <div>
+                <label for="model-selection">Seleccionar Modelo:</label>
+                <select id="model-selection" onchange="console.log('rape me')">
+                    <option hidden disabled selected></option>
+                    <optgroup label="Predicción">
+                        <option id="linear-regresion" value="lr">Regresión Lineal</option>
+                    </optgroup>
+                </select>
+            </div>
+        </form>
+
+        <div id="dataset"></div>
+
+        <div id="selectors"></div>
+
+        <br/>
+
+        <div id="buttons" hidden>
+            <form>
+                <button id="btn-train" type="button" onclick="">Entrenar</button>
+                <button id="btn-predict" type="button" disabled onclick="selectedModel.test()" >Predicción</button>
+                <button id="btn-graph" type="button" disabled onclick="selectedModel.graph()">Generar Gráficas</button>
+            </form>
+        </div>
+
+        <div class="tabs" id="tabs" hidden >
+                <button id="tab-train" onclick="showTab('train')" hidden >Salida Entrenamiento</button>
+                <button id="tab-predict" onclick="showTab('predict')" hidden >Salida Predicción</button>
+                <button id="tab-graphs" onclick="showTab('graphs')" hidden >Gráficas</button>
+                <button id="tab-all" onclick="showTab('all')" hidden >Mostrar Todo</button>
+        </div>
+        <div id="train" class="result"></div>
+        <div id="predict" class="result"></div>
+        <div id="graphs" class="result"><canvas class="graphs"></canvas></div>
+    </body>
+
+    <script type="text/javascript" id="csv">
+
+    </script>
+
+    <script type="text/javascript">
+        const operations = {
+            "lr":{
+                train: () => {
+                    const vals = getSelectedValues();
+                    const linear = new LinearRegression()
+                    linear.fit(vals.xTrain, vals.yTrain)
+                    selectedModel.model = linear;
+                    const table = createTableFromObject(linear);
+                    document.getElementById("train").appendChild(table);
+                },
+                test: () =>  {
+                    const vals = getSelectedValues();
+                    const y_pred = selectedModel.model.predict(vals.xTest)
+                    console.log(y_pred)
+                    const table = CreateArrayTable(y_pred); 
+                    selectedModel.result = y_pred
+                    document.getElementById("predict").appendChild(table);
+                },
+                graph: () => {
+                    console.log("graph");
+
+                    const vals = getSelectedValues();
+                    console.log(vals, vals.xTrain);
+
+                    const data = {
+                        datasets: [
+                            {
+                                label: 'Datos de Entrenamiento',
+                                data: vals.xTrain.map((d, i) => ({
+                                    x: vals.yTrain[i],
+                                    y: d
+                                })),
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                tension: 0.4, // Suavizado de la línea
+                                fill: false
+                            },
+                            {
+                                label: 'Predicción de Regresión Lineal',
+                                data: vals.xTrain.map((d, i) => ({
+                                    x: d,
+                                    y: selectedModel.result[i]
+                                })),
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                tension: 0.4,
+                                fill: false
+                            }
+                        ]
+                    };
+
+                    const options = {
+                        responsive: true,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'X'
+                                },
+                                type: 'linear',
+                                position: 'bottom'
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Y'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        }
+                    };
+
+                    const ctx = document.querySelector(".graphs").getContext("2d");
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: data,
+                        options: options
+                    });
+                }
+            }
+        }
+
+        let data_array = []; 
+
+        let selectedModel = {
+            model: null,
+            train: () => {},
+            test: () => {},
+            graph: () => {},
+            result: {}
+        };
+
+
+        document.getElementById("csv").addEventListener("change", async(e) => {
+            const file = e.target.files[0];
+            if (file){
+                try{
+                    const {columns, rows} = await loadCSV(file);
+                    data_array = columns;
+                    const tableContainer = document.getElementById("dataset")
+                    tableContainer.innerHTML = ""
+                    tableContainer.appendChild(generateTable(rows));
+                    document.getElementById("model-selection").selectedIndex = 0;
+                    document.getElementById("selectors").innerHTML = "";
+                    document.getElementById("buttons").hidden = true;
+                    document.getElementById("btn-predict").disabled = true;
+                    document.getElementById("btn-graph").disabled = true;
+                    document.getElementById("tab-train").hidden = true;
+                    document.getElementById("tab-all").hidden = true;
+                    document.getElementById("tab-predict").hidden = true;
+                    document.getElementById("tab-graphs").hidden = true;
+                    document.getElementById("tabs").hidden = true;
+                }catch(err){
+                    console.error(err);
+                }
+            }
+        })
+
+
+        document.getElementById("model-selection").addEventListener("input", (e) => {
+            const model = e.target.value;
+            const selectorContainer = document.getElementById("selectors");
+
+            if (!(model in operations)) {
+                console.log("Model not found in operations.");
+                return;
+            }
+            const ops = operations[model];
+            selectedModel.train = ops.train;
+            selectedModel.test = ops.test;
+            selectedModel.graph = ops.graph;
+            selectorContainer.innerHTML = "";
+
+            const newForm = document.createElement("form");
+            const selects = generateSelector(model,Object.keys(data_array));
+
+            selects.forEach(select => {
+                newForm.appendChild(select);
+            });
+
+            selectorContainer.appendChild(newForm);
+            document.getElementById("buttons").hidden = false;
+        });
+
+        function getSelectedValues() {
+            const selects = document.querySelectorAll(".option");
+            const values = {};
+            selects.forEach(select => {
+            values[select.name] = data_array[select.value];
+            });
+            return values;
+        }
+
+        function createTableFromObject(obj){
+            const table = document.createElement("table");
+            const headers = Object.keys(obj);
+            const headerRow = document.createElement("tr");
+            headers.forEach(header => {
+                const th = document.createElement("th");
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+            table.appendChild(headerRow);
+
+            const tr = document.createElement("tr");
+            headers.forEach(header => {
+                const td = document.createElement("td");
+                td.textContent = obj[header];
+                tr.appendChild(td);
+            });
+            table.appendChild(tr);
+
+            return table;
+        }
+
+        function CreateArrayTable(arr){
+            const table = document.createElement("table");
+            arr.forEach(cell => {
+                const tr = document.createElement("tr");
+                const td = document.createElement("td");
+                td.textContent = cell;
+                tr.appendChild(td);
+                table.appendChild(tr);
+            });
+            return table;
+        }
+               
+        document.getElementById("btn-train").addEventListener("click", () => {
+            document.getElementById("train").innerHTML = "";
+            selectedModel.train()
+            document.getElementById("btn-predict").disabled = false;
+            document.getElementById("btn-graph").disabled = true;
+            document.getElementById("predict").innerHTML = "";
+            document.getElementById("graphs").innerHTML = "<canvas class='graphs'></canvas>";
+            document.getElementById("tab-train").hidden = false;
+            document.getElementById("tab-all").hidden = false;
+            document.getElementById("tab-predict").hidden = true;
+            document.getElementById("tab-graphs").hidden = true;
+            document.getElementById("tabs").hidden = false;
+            showTab("train");
+        });
+
+        document.getElementById("btn-predict").addEventListener("click", () => {
+            document.getElementById("predict").innerHTML = "";
+            selectedModel.test()
+            document.getElementById("btn-graph").disabled = false;
+            document.getElementById("graphs").innerHTML = "<canvas class='graphs'></canvas>";
+            document.getElementById("tab-predict").hidden = false;
+            document.getElementById("tab-graphs").hidden = true;
+            showTab("predict");
+        });
+
+        document.getElementById("btn-graph").addEventListener("click", () => {
+            document.getElementById("graphs").innerHTML = "<canvas class='graphs'></canvas>";
+            selectedModel.graph()
+            document.getElementById("tab-graphs").hidden = false;
+            showTab("graphs");
+        });
+
+        /* CSV Functions */
+
+        async function loadCSV(file) {
+            const reader = new FileReader();
+            const content = await new Promise((resolve, reject) => {
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = () => reject(new Error("Error al leer el archivo."));
+                reader.readAsText(file);
+            });
+            return processCSV(content);
+        }
+
+        function processCSV(text) {
+            const lines = text.trim().split("\n");
+            const headers = lines[0].split(",").map(header => header.trim());
+
+            const columns = {};
+            headers.forEach(header => {
+                columns[header] = [];
+            });
+            const rows = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(",").map(value => value.trim());
+                values.forEach((value, index) => {
+                    columns[headers[index]].push(value);
+                });
+                const row = {};
+                values.forEach((value, index) => {
+                    row[headers[index]] = value;
+                });
+                rows.push(row);
+            }
+            return { columns, rows };
+        }
+
+        function generateTable(data) {
+            const table = document.createElement("table");
+            const headers = Object.keys(data[0]);
+
+            const headerRow = document.createElement("tr");
+            headers.forEach(header => {
+                const th = document.createElement("th");
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+            table.appendChild(headerRow);
+
+            data.forEach(row => {
+                const tr = document.createElement("tr");
+                headers.forEach(header => {
+                    const td = document.createElement("td");
+                    td.textContent = row[header];
+                    tr.appendChild(td);
+                });
+                table.appendChild(tr);
+            });
+
+            return table;
+        }
+
+        function generateSelector(model,cols) {
+            let selects = [];
+            let data = [];
+
+            if (model === "lr") {
+                data = ["xTrain", "yTrain","xTest"];
+            }
+
+            data.forEach(name => {
+                let label = document.createElement("label");
+                label.setAttribute("for", name);
+                label.textContent = name;
+                let select = document.createElement("select");
+                select.setAttribute("name", name);
+                select.setAttribute("id", name);
+                select.setAttribute("class", "option");
+
+                cols.forEach(col => {
+                    let option = document.createElement("option");
+                    option.value = col;
+                    option.text = col;
+                    option.selected = col === name;
+                    select.appendChild(option);
+                });
+
+                const container = document.createElement("div");
+                container.appendChild(label);
+                container.appendChild(select);
+
+                selects.push(container);
+            });
+
+            return selects;
+        }
+
+        function showTab(tabId) {
+            const allDivs = document.querySelectorAll(".result");
+            allDivs.forEach(div => {
+                div.style.display = "none";
+            });
+
+            if (tabId === "all") {
+                allDivs.forEach(div => {
+                    div.style.display = "block";
+                });
+            } else {
+                document.getElementById(tabId).style.display = "block";
+            }
+
+            const allButtons = document.querySelectorAll(".tabs button");
+            allButtons.forEach(button => {
+                button.classList.remove("default");
+                if (button.id === `tab-${tabId}`) {
+                    button.classList.add("default");
+                }
+            });
+        }
+
+    </script>
+</html>
