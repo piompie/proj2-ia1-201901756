@@ -5,6 +5,7 @@
         <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
+        <script type="module"> import * as GaugeChart from "https://unpkg.com/gauge-chart@next/dist/bundle.mjs";window.GaugeChart = GaugeChart;</script>
         <style>
         table {
             max-height: 300px;
@@ -50,6 +51,7 @@
                     </optgroup>
                     <optgroup label="Aprendizaje Supervisado">
                         <option id="decision-tree" value="dt">Árbol de decision</option>
+                        <option id="naive-bayes" value="nb">Naïve Bayes</option>
                     </optgroup>
                 </select>
             </div>
@@ -79,10 +81,6 @@
         <div id="predict" class="result"></div>
         <div id="graphs" class="result"><canvas class="graphs"></canvas></div>
     </body>
-
-    <script type="text/javascript" id="csv">
-
-    </script>
 
     <script type="text/javascript">
         const operations = {
@@ -326,8 +324,49 @@
                         maxZoomLevel: 0.8 
                     });
                 }
-
+            },
+            "nb": {
+                train: () => {
+                    console.log(data_array)
+                    const bayes = new NaiveBayes();
+                    Object.keys(data_array).forEach(name => {
+                        bayes.insertCause(name, data_array[name])
+                    })
+                    selectedModel.model = bayes;
+                    const table = createTableFromObject(bayes);
+                    document.getElementById("train").appendChild(table);
+                },
+                test: () => {
+                    const causes = []
+                    const data = getSelectedValuesSupervised()
+                    Object.keys(data).forEach(name => {
+                        causes.push([name,data[name]])
+                    })
+                    const effect = document.getElementById("predictFor").value
+                    const predict = selectedModel.model.predict(effect,causes)
+                    selectedModel.result = predict;
+                    document.getElementById('predict').innerHTML = `<pre>${effect} : ${predict[0]} ${predict[1]} </pre>`
+                },
+                graph: () => {
+                    const effect = document.getElementById("predictFor").value;
+                    const element = document.getElementById("graphs");
+                    element.classList.add("fg-muted");
+                    const predict = selectedModel.result;
+                    const value = parseFloat(predict[1].replace("nothing :( ").replace('%', ''))
+                    const gaugeOptions = {
+                        hasNeedle: true,
+                        needleColor: 'gray',
+                        needleUpdateSpeed: 1000,
+                        arcColors: ['rgb(44, 151, 222)', 'lightgray'],
+                        arcDelimiters: [value == 0 ? 0.01 : value],
+                        arcLabels: [predict[1], ''],
+                        rangeLabel: ['0%', '100%'],
+                        centralLabel: `${predict[0]}`,
+                    }
+                    GaugeChart.gaugeChart(element, 500, gaugeOptions).updateNeedle(value)
+                }
             }
+            
         }
 
         let data_array = []; 
@@ -367,7 +406,6 @@
                 }
             }
         })
-
 
         document.getElementById("model-selection").addEventListener("input", (e) => {
             const model = e.target.value;
@@ -545,7 +583,7 @@
 
             if (["lr","pr"].includes(model)) {
                 return predictionSelector(model,cols)
-            } else if (model === "dt") {
+            } else if (["dt","nb"].includes(model)) {
                 return supervisedSelector(model,cols,data_array /*variable global*/)
             }
 
