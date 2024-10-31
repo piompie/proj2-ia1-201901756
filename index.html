@@ -4,6 +4,7 @@
         <script type="text/javascript" src="https://tytusdb.github.io/tytusjs/dist/tytus.js"></script>
         <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/standalone/umd/vis-network.min.js"></script>
         <style>
         table {
             max-height: 300px;
@@ -41,11 +42,14 @@
             </div>
             <div>
                 <label for="model-selection">Seleccionar Modelo:</label>
-                <select id="model-selection" onchange="console.log('rape me')">
+                <select id="model-selection">
                     <option hidden disabled selected></option>
                     <optgroup label="Predicción">
                         <option id="linear-regression" value="lr">Regresión Lineal</option>
                         <option id="poly-regression" value="pr">Regresión Polinomial</option>
+                    </optgroup>
+                    <optgroup label="Aprendizaje Supervisado">
+                        <option id="decision-tree" value="dt">Árbol de decision</option>
                     </optgroup>
                 </select>
             </div>
@@ -84,7 +88,7 @@
         const operations = {
             "lr":{
                 train: () => {
-                    const vals = getSelectedValues();
+                    const vals = getSelectedValuesPrediction();
                     const linear = new LinearRegression()
                     linear.fit(vals.xTrain, vals.yTrain)
                     selectedModel.model = linear;
@@ -92,7 +96,7 @@
                     document.getElementById("train").appendChild(table);
                 },
                 test: () =>  {
-                    const vals = getSelectedValues();
+                    const vals = getSelectedValuesPrediction();
                     const y_pred = selectedModel.model.predict(vals.xTest)
                     console.log(y_pred)
                     const table = CreateArrayTable(y_pred); 
@@ -102,7 +106,7 @@
                 graph: () => {
                     console.log("graph");
 
-                    const vals = getSelectedValues();
+                    const vals = getSelectedValuesPrediction();
                     console.log(vals, vals.xTrain);
 
                     const data = {
@@ -168,7 +172,7 @@
             },
             "pr": {
                 train: () => {
-                    const vals = getSelectedValues();
+                    const vals = getSelectedValuesPrediction();
                     const linear = new PolynomialRegression()
                     console.log("vals",vals)
                     linear.fit(vals.xTrain, vals.yTrain, document.getElementById("degree").value)
@@ -177,7 +181,7 @@
                     document.getElementById("train").appendChild(table);
                 },
                 test: () => {
-                    const vals = getSelectedValues();
+                    const vals = getSelectedValuesPrediction();
                     const y_pred = selectedModel.model.predict(vals.xTest)
                     console.log(y_pred)
                     const table = CreateArrayTable(y_pred); 
@@ -187,7 +191,7 @@
                 graph: () => {
                     console.log("graph");
 
-                    const vals = getSelectedValues();
+                    const vals = getSelectedValuesPrediction();
                     console.log(vals, vals.xTrain);
 
                     const data = {
@@ -250,11 +254,84 @@
                         options: options
                     });
                 }
+            },
+            "dt": {
+                train: () => {
+                    let headers = Object.keys(data_array)
+                    const index = headers.indexOf(document.getElementById("predictFor").value)
+                    headers = moveElementToEnd(headers, index);
+                    const data_set = []
+                    data_set.push(headers)
+                    data_rows.forEach(row => {
+                        let newRow = []
+                        headers.forEach(col => {
+                            newRow.push(row[col])
+                        })
+                        //newRow = moveElementToEnd(newRow, index) // ni idea...
+                        data_set.push(newRow)
+                    })
+                    console.log(data_set)
+                    const tree = new DecisionTreeID3(data_set)
+                    const root = tree.train(data_set)
+                    selectedModel.model = tree;
+                    selectedModel.result = root;
+                    const table = createTableFromObject(root);
+                    document.getElementById("train").appendChild(table);
+                    console.log(selectedModel.model.generateDotString(selectedModel.result))
+                },
+                test: () => {
+                    let headers = Object.keys(data_array)
+                    const index = headers.indexOf(document.getElementById("predictFor").value)
+                    headers = moveElementToEnd(headers, index);
+
+                    let data_set = []
+                    const data = getSelectedValuesSupervised()
+                    Object.keys(data).forEach(name => {
+                        data_set.push(data[name])
+                    })
+                    data_set = moveElementToEnd(data_set, index)
+                    const predict = selectedModel.model.predict([headers,data_set],selectedModel.result)
+                    document.getElementById('predict').innerHTML = `<pre>${headers[headers.length-1]} : ${predict.value}</pre>`
+                    //console.log(selectedModel.model.generateDotString(selectedModel.result))
+                },
+                graph: () => {
+                    const graphDOT = selectedModel.model.generateDotString(selectedModel.result)
+                    const convertedDOT = vis.parseDOTNetwork(graphDOT)
+                    const options = {
+                        layout: {
+                            hierarchical: {
+                                levelSeparation: 100,
+                                nodeSpacing: 100,
+                                parentCentralization: true,
+                                direction: 'UD', // UD, DU, LR, RL
+                                sortMethod: 'directed', // hubsize, directed
+                                //shakeTowards: 'roots' // roots, leaves                        
+                            },
+                        },
+                        edges: {
+                            font: {
+                                color: '#ffffff', // Color del texto
+                                strokeWidth: 3, // Grosor del borde alrededor del texto
+                                strokeColor: '#000000', // Color de fondo del borde del texto
+                                background: '#000000', // Color de fondo del texto
+                                align: 'horizontal' // Alineación del texto en la arista
+                            }
+                        }
+                    }
+                    const container = document.getElementById("graphs")
+                    container.style.height = "500px"
+                    const visGraph = new vis.Network(container,convertedDOT,options)
+                    visGraph.fit({
+                        animation: false,
+                        maxZoomLevel: 0.8 
+                    });
+                }
 
             }
         }
 
         let data_array = []; 
+        let data_rows = [];
 
         let selectedModel = {
             model: null,
@@ -271,6 +348,7 @@
                 try{
                     const {columns, rows} = await loadCSV(file);
                     data_array = columns;
+                    data_rows = rows;
                     const tableContainer = document.getElementById("dataset")
                     tableContainer.innerHTML = ""
                     tableContainer.appendChild(generateTable(rows));
@@ -316,13 +394,23 @@
             document.getElementById("buttons").hidden = false;
         });
 
-        function getSelectedValues() {
+        function getSelectedValuesPrediction() {
             const selects = document.querySelectorAll(".option");
             const values = {};
             selects.forEach(select => {
-            values[select.name] = data_array[select.value];
+                console.log("que pex",select.name, select.value)
+                values[select.name] = data_array[select.value];
             });
             console.log(values)
+            return values;
+        }
+
+        function getSelectedValuesSupervised() {
+            const selects = document.querySelectorAll(".option");
+            const values = {};
+            selects.forEach(select => {
+                values[select.name] = select.value;
+            });
             return values;
         }
 
@@ -366,7 +454,7 @@
             document.getElementById("btn-predict").disabled = false;
             document.getElementById("btn-graph").disabled = true;
             document.getElementById("predict").innerHTML = "";
-            document.getElementById("graphs").innerHTML = "<canvas class='graphs'></canvas>";
+            document.getElementById("graphs").innerHTML = "<canvas class='graphs' id='canvas-graph'></canvas>";
             document.getElementById("tab-train").hidden = false;
             document.getElementById("tab-all").hidden = false;
             document.getElementById("tab-predict").hidden = true;
@@ -379,14 +467,14 @@
             document.getElementById("predict").innerHTML = "";
             selectedModel.test()
             document.getElementById("btn-graph").disabled = false;
-            document.getElementById("graphs").innerHTML = "<canvas class='graphs'></canvas>";
+            document.getElementById("graphs").innerHTML = "<canvas class='graphs' id='canvas-graph'></canvas>";
             document.getElementById("tab-predict").hidden = false;
             document.getElementById("tab-graphs").hidden = true;
             showTab("predict");
         });
 
         document.getElementById("btn-graph").addEventListener("click", () => {
-            document.getElementById("graphs").innerHTML = "<canvas class='graphs'></canvas>";
+            document.getElementById("graphs").innerHTML = "<canvas class='graphs' id='canvas-graph'></canvas>";
             selectedModel.graph()
             document.getElementById("tab-graphs").hidden = false;
             showTab("graphs");
@@ -454,14 +542,18 @@
         }
 
         function generateSelector(model,cols) {
-            let selects = [];
-            let data = [];
 
-            console.log(model,["lr","pr"], model in ["lr","pr"]);
             if (["lr","pr"].includes(model)) {
-                data = ["xTrain", "yTrain","xTest"];
+                return predictionSelector(model,cols)
+            } else if (model === "dt") {
+                return supervisedSelector(model,cols,data_array /*variable global*/)
             }
 
+        }
+
+        function predictionSelector(model,cols){
+            let selects = [];
+            const data = ["xTrain", "yTrain","xTest"];
             data.forEach(name => {
                 let label = document.createElement("label");
                 label.setAttribute("for", name);
@@ -500,7 +592,54 @@
                 container.appendChild(select);
                 selects.push(container);
             }
+            return selects;
+        }
 
+        function supervisedSelector(model,cols,arrays){
+            let selects = [];
+            const data = cols;
+
+            const wLabel = document.createElement("label")
+            wLabel.setAttribute("for", "wSelect");
+            wLabel.textContent = "Predecir para";
+            const wSelect = document.createElement("select")
+            wSelect.setAttribute("name", "predictFor");
+            wSelect.setAttribute("id", "predictFor");
+            //wSelect.setAttribute("class", "option");
+            data.forEach(name => {
+                let option = document.createElement("option");
+                option.value = name;
+                option.text = name;
+                wSelect.appendChild(option);
+            });
+            const wContainer = document.createElement("div");
+            wContainer.appendChild(wLabel);
+            wContainer.appendChild(wSelect);
+            selects.push(wContainer);
+
+            data.forEach(name => {
+                const filteredArray = [... new Set(arrays[name])];
+
+                const label = document.createElement("label");
+                label.setAttribute("for", name);
+                label.textContent = name;
+                const select = document.createElement("select");
+                select.setAttribute("name", name);
+                select.setAttribute("id", name);
+                select.setAttribute("class", "option");
+
+                filteredArray.forEach(col => {
+                    let option = document.createElement("option");
+                    option.value = col;
+                    option.text = col;
+                    select.appendChild(option);
+                });
+
+                const container = document.createElement("div");
+                container.appendChild(label);
+                container.appendChild(select);
+                selects.push(container);
+            });
             return selects;
         }
 
@@ -525,6 +664,15 @@
                     button.classList.add("default");
                 }
             });
+        }
+
+        /* Helper */
+        function moveElementToEnd(array, n) {
+            if (n >= 0 && n < array.length) {
+                const element = array.splice(n, 1)[0];
+                array.push(element);
+            }
+            return array;
         }
 
     </script>
