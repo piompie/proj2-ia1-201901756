@@ -45,14 +45,11 @@
                 <label for="model-selection">Seleccionar Modelo:</label>
                 <select id="model-selection">
                     <option hidden disabled selected></option>
-                    <optgroup label="Predicción">
-                        <option id="linear-regression" value="lr">Regresión Lineal</option>
-                        <option id="poly-regression" value="pr">Regresión Polinomial</option>
-                    </optgroup>
-                    <optgroup label="Aprendizaje Supervisado">
-                        <option id="decision-tree" value="dt">Árbol de decision</option>
-                        <option id="naive-bayes" value="nb">Naïve Bayes</option>
-                    </optgroup>
+                    <option id="linear-regression" value="lr">Regresión Lineal</option>
+                    <option id="poly-regression" value="pr">Regresión Polinomial</option>
+                    <option id="decision-tree" value="dt">Árbol de decision</option>
+                    <option id="naive-bayes" value="nb">Naïve Bayes</option>
+                    <option id="neural-network" value="nn">Redes Neuronales</option>
                 </select>
             </div>
         </form>
@@ -86,15 +83,15 @@
         const operations = {
             "lr":{
                 train: () => {
-                    const vals = getSelectedValuesPrediction();
+                    const vals = getSelectedRegression();
                     const linear = new LinearRegression()
                     linear.fit(vals.xTrain, vals.yTrain)
                     selectedModel.model = linear;
                     const table = createTableFromObject(linear);
                     document.getElementById("train").appendChild(table);
                 },
-                test: () =>  {
-                    const vals = getSelectedValuesPrediction();
+                test: () => {
+                    const vals = getSelectedRegression();
                     const y_pred = selectedModel.model.predict(vals.xTest)
                     console.log(y_pred)
                     const table = CreateArrayTable(y_pred); 
@@ -104,7 +101,7 @@
                 graph: () => {
                     console.log("graph");
 
-                    const vals = getSelectedValuesPrediction();
+                    const vals = getSelectedRegression();
                     console.log(vals, vals.xTrain);
 
                     const data = {
@@ -170,7 +167,7 @@
             },
             "pr": {
                 train: () => {
-                    const vals = getSelectedValuesPrediction();
+                    const vals = getSelectedRegression();
                     const linear = new PolynomialRegression()
                     console.log("vals",vals)
                     linear.fit(vals.xTrain, vals.yTrain, document.getElementById("degree").value)
@@ -179,7 +176,7 @@
                     document.getElementById("train").appendChild(table);
                 },
                 test: () => {
-                    const vals = getSelectedValuesPrediction();
+                    const vals = getSelectedRegression();
                     const y_pred = selectedModel.model.predict(vals.xTest)
                     console.log(y_pred)
                     const table = CreateArrayTable(y_pred); 
@@ -189,7 +186,7 @@
                 graph: () => {
                     console.log("graph");
 
-                    const vals = getSelectedValuesPrediction();
+                    const vals = getSelectedRegression();
                     console.log(vals, vals.xTrain);
 
                     const data = {
@@ -283,7 +280,7 @@
                     headers = moveElementToEnd(headers, index);
 
                     let data_set = []
-                    const data = getSelectedValuesSupervised()
+                    const data = getSelectedBayesTree()
                     Object.keys(data).forEach(name => {
                         data_set.push(data[name])
                     })
@@ -338,7 +335,7 @@
                 },
                 test: () => {
                     const causes = []
-                    const data = getSelectedValuesSupervised()
+                    const data = getSelectedBayesTree()
                     Object.keys(data).forEach(name => {
                         causes.push([name,data[name]])
                     })
@@ -365,8 +362,91 @@
                     }
                     GaugeChart.gaugeChart(element, 500, gaugeOptions).updateNeedle(value)
                 }
+            },
+            "nn": {
+                train: () => {
+                    const input_cols = document.querySelectorAll(".neural-input");
+                    const output_cols = document.querySelectorAll(".neural-output");
+                    const hidden_neurons = document.querySelectorAll(".neural-hidden");
+                    const inputs = [];
+                    const outputs = [];
+                    const hidden = [];
+                    input_cols.forEach(col => {
+                        inputs.push(col.value);
+                    });
+                    output_cols.forEach(col => {
+                        outputs.push(col.value);
+                    });
+                    hidden_neurons.forEach(neuron => {
+                        hidden.push(neuron.value);
+                    });
+                    // chapuza
+                    const neuralNetwork = new NeuralNetwork([inputs.length,...hidden, 2]); 
+                    //console.log([inputs.length, ...hidden, outputs.length])
+
+                    for (let i = 0; i < data_rows.length; i++) {
+                        const row = data_rows[i];
+                        const input = [];
+                        const output = [];
+                        inputs.forEach(col => {
+                            input.push(parseInt(row[col]));
+                        });
+                        outputs.forEach(col => {
+                            output.push(...row[col] == 1 ? [1,0] : [0,1]);
+                        });
+                        neuralNetwork.Entrenar(input,output)
+                    }
+                    selectedModel.model = neuralNetwork;
+                    const table = createTableFromObject(neuralNetwork);
+                    document.getElementById("train").appendChild(table);
+
+                },
+                test: () => {
+                    const input_cols = document.querySelectorAll(".neural-predict");
+                    const inputs = [];
+                    input_cols.forEach(col => {
+                        inputs.push(parseInt(col.value));
+                    });
+                    const predict = selectedModel.model.Predecir(inputs)
+                    selectedModel.result = predict;
+                    console.log(predict)
+                    document.getElementById('predict').innerHTML = `<pre> ${inputs}: { probabilidad_1: ${predict[0]} probabilidad_0: ${predict[1]} } </pre>`
+
+                },
+                graph: () => {
+                    const data = {
+                        labels: ['Probabilidad 1', 'Probabilidad 0'],
+                        datasets: [{
+                            label: 'Probabilidades',
+                            data: selectedModel.result,
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.2)',
+                                'rgba(54, 162, 235, 0.2)'
+                            ],
+                            borderColor: [
+                                'rgba(255, 99, 132, 1)',
+                                'rgba(54, 162, 235, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    };
+                    const options = {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    };
+                    const ctx = document.querySelector(".graphs").getContext("2d");
+                    new Chart(ctx, {
+                        type: 'doughnut',
+                        data: data,
+                        options: options
+                    });
+
+                }
             }
-            
         }
 
         let data_array = []; 
@@ -401,6 +481,7 @@
                     document.getElementById("tab-predict").hidden = true;
                     document.getElementById("tab-graphs").hidden = true;
                     document.getElementById("tabs").hidden = true;
+                    document.getElementById("graphs").classList.remove("fg-muted");
                 }catch(err){
                     console.error(err);
                 }
@@ -408,6 +489,7 @@
         })
 
         document.getElementById("model-selection").addEventListener("input", (e) => {
+
             const model = e.target.value;
             const selectorContainer = document.getElementById("selectors");
 
@@ -430,9 +512,11 @@
 
             selectorContainer.appendChild(newForm);
             document.getElementById("buttons").hidden = false;
+
+            document.getElementById("graphs").classList.remove("fg-muted");
         });
 
-        function getSelectedValuesPrediction() {
+        function getSelectedRegression() {
             const selects = document.querySelectorAll(".option");
             const values = {};
             selects.forEach(select => {
@@ -443,7 +527,7 @@
             return values;
         }
 
-        function getSelectedValuesSupervised() {
+        function getSelectedBayesTree() {
             const selects = document.querySelectorAll(".option");
             const values = {};
             selects.forEach(select => {
@@ -582,14 +666,16 @@
         function generateSelector(model,cols) {
 
             if (["lr","pr"].includes(model)) {
-                return predictionSelector(model,cols)
+                return regressionSelector(model,cols)
             } else if (["dt","nb"].includes(model)) {
-                return supervisedSelector(model,cols,data_array /*variable global*/)
+                return bayesTreeSelector(model,cols,data_array /*variable global*/)
+            }else if (model === "nn"){
+                return neuralNetworkFormGenerator(model,cols);
             }
 
         }
 
-        function predictionSelector(model,cols){
+        function regressionSelector(model,cols){
             let selects = [];
             const data = ["xTrain", "yTrain","xTest"];
             data.forEach(name => {
@@ -633,7 +719,7 @@
             return selects;
         }
 
-        function supervisedSelector(model,cols,arrays){
+        function bayesTreeSelector(model,cols,arrays){
             let selects = [];
             const data = cols;
 
@@ -679,6 +765,173 @@
                 selects.push(container);
             });
             return selects;
+        }
+
+        function neuralNetworkFormGenerator(model,cols) {
+            let formElements = [];
+
+            // Bloque para seleccionar el número de Inputs y Outputs
+            const configContainer = document.createElement("div");
+            configContainer.setAttribute("class", "config-container");
+
+            const inputNumLabel = document.createElement("label");
+            inputNumLabel.setAttribute("for", "numInputs");
+            inputNumLabel.textContent = "Número de Inputs:";
+            const inputNumField = document.createElement("input");
+            inputNumField.setAttribute("type", "number");
+            inputNumField.setAttribute("id", "numInputs");
+            inputNumField.setAttribute("name", "numInputs");
+            inputNumField.setAttribute("min", "1");
+            inputNumField.setAttribute("value",  cols.length-1);
+            inputNumField.onchange = () => generateInputSelectors();
+            
+            const outputNumLabel = document.createElement("label");
+            outputNumLabel.setAttribute("for", "numOutputs");
+            outputNumLabel.textContent = "Número de Outputs:";
+            const outputNumField = document.createElement("input");
+            outputNumField.setAttribute("type", "number");
+            outputNumField.setAttribute("id", "numOutputs");
+            outputNumField.setAttribute("name", "numOutputs");
+            outputNumField.setAttribute("min", "1");
+            outputNumField.setAttribute("max", "1");
+            outputNumField.setAttribute("title", "Bloqueado a 1; dejo el output porque ya lo había dejado implementado para multiples ;(");
+            outputNumField.setAttribute("value","1");
+            outputNumField.onchange = () => generateOutputSelectors();
+
+            const hiddenLayersLabel = document.createElement("label");
+            hiddenLayersLabel.setAttribute("for", "numHiddenLayers");
+            hiddenLayersLabel.textContent = "Número de Capas Ocultas:";
+            const hiddenLayersField = document.createElement("input");
+            hiddenLayersField.setAttribute("type", "number");
+            hiddenLayersField.setAttribute("id", "numHiddenLayers");
+            hiddenLayersField.setAttribute("name", "numHiddenLayers");
+            hiddenLayersField.setAttribute("min", "1");
+            hiddenLayersField.setAttribute("value", "1");
+            hiddenLayersField.onchange = () => generateHiddenLayerConfig();
+
+            configContainer.appendChild(inputNumLabel);
+            configContainer.appendChild(inputNumField);
+            configContainer.appendChild(outputNumLabel);
+            configContainer.appendChild(outputNumField);
+            configContainer.appendChild(hiddenLayersLabel);
+            configContainer.appendChild(hiddenLayersField);
+            configContainer.style.display = "block";
+            formElements.push(configContainer);
+
+            // Bloque para seleccionar los Inputs
+            const inputSelectorsContainer = document.createElement("div");
+            inputSelectorsContainer.setAttribute("id", "inputSelectorsContainer");
+            inputSelectorsContainer.setAttribute("class", "selector-container");
+            formElements.push(inputSelectorsContainer);
+
+            // Bloque para seleccionar los Outputs
+            const outputSelectorsContainer = document.createElement("div");
+            outputSelectorsContainer.setAttribute("id", "outputSelectorsContainer");
+            outputSelectorsContainer.setAttribute("class", "selector-container");
+            formElements.push(outputSelectorsContainer);
+
+            // Contenedor para configuración de capas ocultas específicas
+            const hiddenLayerConfigContainer = document.createElement("div");
+            hiddenLayerConfigContainer.setAttribute("id", "hiddenLayerConfigContainer");
+            formElements.push(hiddenLayerConfigContainer);
+
+            userInputsContainer = document.createElement("div");
+            userInputsContainer.setAttribute("id", "userInputsContainer");
+            userInputsContainer.setAttribute("class", "selector-container");
+            formElements.push(userInputsContainer);
+
+            // Función para generar campos de selección de inputs
+            function generateInputSelectors() {
+                inputSelectorsContainer.innerHTML = '';
+                userInputsContainer.innerHTML = '';
+                const numInputs = inputNumField.value;
+
+                for (let i = 1; i <= numInputs; i++) {
+                    const label = document.createElement("label");
+                    label.textContent = `Input ${i}:`;
+                    const select = document.createElement("select");
+                    select.setAttribute("name", `input-${i}`);
+                    select.setAttribute("id", `input-${i}`);
+                    select.setAttribute("class", `neural-input`);
+                    let cnt = 0;
+                    cols.forEach(col => {
+                        let option = document.createElement("option");
+                        option.value = col;
+                        option.text = col;
+                        option.selected = cnt === (i-1);
+                        cnt++;
+                        select.appendChild(option);
+                    });
+                    const container = document.createElement("div");
+                    container.appendChild(label);
+                    container.appendChild(select);
+                    inputSelectorsContainer.appendChild(container);
+
+                    const labelU = document.createElement("label");
+                    labelU.textContent = `Valor ${i}:`;
+                    const input = document.createElement("input");
+                    input.setAttribute("name", `predict-${i}`);
+                    input.setAttribute("id", `predict-${i}`);
+                    input.setAttribute("class", `neural-predict`);
+                    const containerU = document.createElement("div");
+                    containerU.appendChild(labelU);
+                    containerU.appendChild(input);
+                    userInputsContainer.appendChild(containerU);
+                }
+            }
+
+            // Función para generar campos de selección de outputs
+            function generateOutputSelectors(){
+                outputSelectorsContainer.innerHTML = '';
+                const numOutputs = outputNumField.value;
+
+                for (let i = 1; i <= numOutputs; i++) {
+                    const label = document.createElement("label");
+                    label.textContent = `Output ${i}:`;
+                    const select = document.createElement("select");
+                    select.setAttribute("name", `output-${i}`);
+                    select.setAttribute("id", `output-${i}`);
+                    select.setAttribute("class", `neural-output`);
+                    cols.forEach(col => {
+                        let option = document.createElement("option");
+                        option.value = col;
+                        option.text = col;
+                        select.appendChild(option);
+                    });
+                    select.selectedIndex = cols.length-i;
+                    const container = document.createElement("div");
+                    container.appendChild(label);
+                    container.appendChild(select);
+                    outputSelectorsContainer.appendChild(container);
+
+                }
+            }
+
+            // Función para generar configuración de capas ocultas y neuronas
+            function generateHiddenLayerConfig(){
+                hiddenLayerConfigContainer.innerHTML = '';
+                const numLayers = hiddenLayersField.value;
+
+                for (let i = 1; i <= numLayers; i++) {
+                    const label = document.createElement("label");
+                    label.textContent = `Capas Ocultas ${i} - Neuronas:`;
+                    const neuronsField = document.createElement("input");
+                    neuronsField.setAttribute("type", "number");
+                    neuronsField.setAttribute("name", `hiddenLayer-${i}`);
+                    neuronsField.setAttribute("min", "1");
+                    neuronsField.setAttribute("value", "1");
+                    neuronsField.setAttribute("class", `neural-hidden`);
+                    const container = document.createElement("div");
+                    container.appendChild(label);
+                    container.appendChild(neuronsField);
+                    hiddenLayerConfigContainer.appendChild(container);
+                }
+            }
+            inputNumField.onchange();
+            outputNumField.onchange();
+            hiddenLayersField.onchange();
+
+            return formElements;
         }
 
         function showTab(tabId) {
