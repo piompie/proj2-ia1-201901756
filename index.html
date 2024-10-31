@@ -44,7 +44,8 @@
                 <select id="model-selection" onchange="console.log('rape me')">
                     <option hidden disabled selected></option>
                     <optgroup label="Predicción">
-                        <option id="linear-regresion" value="lr">Regresión Lineal</option>
+                        <option id="linear-regression" value="lr">Regresión Lineal</option>
+                        <option id="poly-regression" value="pr">Regresión Polinomial</option>
                     </optgroup>
                 </select>
             </div>
@@ -164,6 +165,92 @@
                         options: options
                     });
                 }
+            },
+            "pr": {
+                train: () => {
+                    const vals = getSelectedValues();
+                    const linear = new PolynomialRegression()
+                    console.log("vals",vals)
+                    linear.fit(vals.xTrain, vals.yTrain, document.getElementById("degree").value)
+                    selectedModel.model = linear;
+                    const table = createTableFromObject(linear);
+                    document.getElementById("train").appendChild(table);
+                },
+                test: () => {
+                    const vals = getSelectedValues();
+                    const y_pred = selectedModel.model.predict(vals.xTest)
+                    console.log(y_pred)
+                    const table = CreateArrayTable(y_pred); 
+                    selectedModel.result = y_pred
+                    document.getElementById("predict").appendChild(table);
+                },
+                graph: () => {
+                    console.log("graph");
+
+                    const vals = getSelectedValues();
+                    console.log(vals, vals.xTrain);
+
+                    const data = {
+                        datasets: [
+                            {
+                                label: 'Datos de Entrenamiento',
+                                data: vals.xTrain.map((d, i) => ({
+                                    x: vals.yTrain[i],
+                                    y: d
+                                })),
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                tension: 0.4, // Suavizado de la línea
+                                fill: false
+                            },
+                            {
+                                label: 'Predicción de Regresión Polinomial',
+                                data: vals.xTrain.map((d, i) => ({
+                                    x: d,
+                                    y: selectedModel.result[i]
+                                })),
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                                tension: 0.4,
+                                fill: false
+                            }
+                        ]
+                    };
+
+                    const options = {
+                        responsive: true,
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'X'
+                                },
+                                type: 'linear',
+                                position: 'bottom'
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Y'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        }
+                    };
+
+                    const ctx = document.querySelector(".graphs").getContext("2d");
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: data,
+                        options: options
+                    });
+                }
+
             }
         }
 
@@ -235,6 +322,7 @@
             selects.forEach(select => {
             values[select.name] = data_array[select.value];
             });
+            console.log(values)
             return values;
         }
 
@@ -369,7 +457,8 @@
             let selects = [];
             let data = [];
 
-            if (model === "lr") {
+            console.log(model,["lr","pr"], model in ["lr","pr"]);
+            if (["lr","pr"].includes(model)) {
                 data = ["xTrain", "yTrain","xTest"];
             }
 
@@ -396,6 +485,21 @@
 
                 selects.push(container);
             });
+            if (model === "pr"){
+                let label = document.createElement("label");
+                label.setAttribute("for", "degree");
+                label.textContent = "Grado del Polinomio";
+                let select = document.createElement("input");
+                select.setAttribute("type", "number");
+                select.setAttribute("id", "degree");
+                select.setAttribute("name", "degree");
+                select.setAttribute("min", "1");
+                select.setAttribute("value", "1");
+                const container = document.createElement("div");
+                container.appendChild(label);
+                container.appendChild(select);
+                selects.push(container);
+            }
 
             return selects;
         }
