@@ -111,8 +111,8 @@
                             {
                                 label: 'Datos de Entrenamiento',
                                 data: vals.xTrain.map((d, i) => ({
-                                    x: vals.yTrain[i],
-                                    y: d
+                                    x: d,
+                                    y: vals.yTrain[i]
                                 })),
                                 borderColor: 'rgba(75, 192, 192, 1)',
                                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -171,7 +171,7 @@
                 train: () => {
                     const vals = getSelectedRegression();
                     const linear = new PolynomialRegression()
-                    linear.fit(vals.xTrain, vals.yTrain, document.getElementById("degree").value)
+                    linear.fit(vals.xTrain, vals.yTrain, Number(document.getElementById("degree").value))
                     selectedModel.model = linear;
                     const table = createTableFromObject(linear);
                     console.log(document.getElementById("train"))
@@ -196,8 +196,8 @@
                             {
                                 label: 'Datos de Entrenamiento',
                                 data: vals.xTrain.map((d, i) => ({
-                                    x: vals.yTrain[i],
-                                    y: d
+                                    x: d,
+                                    y: vals.yTrain[i]
                                 })),
                                 borderColor: 'rgba(75, 192, 192, 1)',
                                 backgroundColor: 'rgba(75, 192, 192, 0.2)',
@@ -711,7 +711,7 @@
             const selects = document.querySelectorAll(".option");
             const values = {};
             selects.forEach(select => {
-                values[select.name] = data_array[select.value];
+                values[select.name] = data_array[select.value].map(Number);
             });
             console.log(values)
             return values;
@@ -1376,7 +1376,8 @@
         }
 
         /* Helper */
-        function moveElementToEnd(array, n) {
+        function moveElementToEnd(array, pos) {
+            const n = Number(pos);
             if (n >= 0 && n < array.length) {
                 const element = array.splice(n, 1)[0];
                 array.push(element);
