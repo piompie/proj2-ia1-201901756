@@ -50,6 +50,7 @@
                     <option id="decision-tree" value="dt">Árbol de decision</option>
                     <option id="naive-bayes" value="nb">Naïve Bayes</option>
                     <option id="neural-network" value="nn">Redes Neuronales</option>
+                    <option id="k-means" value="km">K-means</option>
                 </select>
             </div>
         </form>
@@ -169,10 +170,10 @@
                 train: () => {
                     const vals = getSelectedRegression();
                     const linear = new PolynomialRegression()
-                    console.log("vals",vals)
                     linear.fit(vals.xTrain, vals.yTrain, document.getElementById("degree").value)
                     selectedModel.model = linear;
                     const table = createTableFromObject(linear);
+                    console.log(document.getElementById("train"))
                     document.getElementById("train").appendChild(table);
                 },
                 test: () => {
@@ -446,6 +447,111 @@
                     });
 
                 }
+            },
+            "km": {
+                train: () => {
+                    const vals = getSelectedKmeans();
+                    const dimension = [];
+                    for (let i = 0; i < data_rows.length; i++) {
+                        const cell = [];
+                        vals.forEach(val => {
+                            cell.push(parseInt(data_rows[i][val]));
+                        });
+                        dimension.push(cell.length == 1 ? cell[0] : cell);
+                    }
+                    console.log(dimension)
+                    const kmeans = vals.length == 1 ? new LinearKMeans() : new _2DKMeans();
+                    selectedModel.model = kmeans;
+                    selectedModel.data_dimension = dimension 
+                    const table = createTableFromObject(kmeans);
+                    document.getElementById("train").appendChild(table);
+                },
+                test: () => {
+                    const num_clusters = document.getElementById("numClusters").value;
+                    const iterations = document.getElementById("numIterations").value;
+                    const clusterized = selectedModel.model.clusterize(num_clusters,selectedModel.data_dimension, iterations);
+                    selectedModel.result = clusterized;
+                    console.log(clusterized);
+                    const arr_table = CreateArrayTable(clusterized);
+                    document.getElementById("predict").appendChild(arr_table);
+
+                },
+                graph: () => {
+                    let clusters = selectedModel.result
+                        .map(a => a[1])
+                        .filter((value, index, self) => self.indexOf(value) === index);
+                    clusters.forEach((cluster, i) => {
+                        clusters[i] = [cluster, "#000000".replace(/0/g, function () { return (~~(Math.random() * 16)).toString(16); })]
+                    });
+                    const clusterized_data = selectedModel.result;
+
+                    const isOneDimensional = document.getElementById('numDimensions').value == 1;
+
+                    // Preparar datos para Chart.js
+                    const dataPoints = clusterized_data.map(e => ({
+                        x: isOneDimensional ? e[0] : e[0][0],
+                        y: isOneDimensional ? 0 : e[0][1],  // En 1D, la coordenada Y es 0
+                        backgroundColor: clusters.find(cluster => cluster[0] === e[1])[1],
+                        pointStyle: 'diamond',
+                        radius: 7
+                    }));
+
+                    const centroidPoints = clusters.map(cluster => ({
+                        x: isOneDimensional ? cluster[0] : cluster[0][0],
+                        y: isOneDimensional ? 0 : cluster[0][1],
+                        backgroundColor: '#ff0000',  // Color rojo para los centroides
+                        pointStyle: 'rect',  // Forma cuadrada para los centroides
+                        radius: 5
+                    }));
+
+                    const data = {
+                        datasets: [
+                            {
+                                label: 'Datos',
+                                data: dataPoints,
+                                showLine: false,
+                            },
+                            {
+                                label: 'Centroides',
+                                data: centroidPoints,
+                                showLine: false,
+                            }
+                        ]
+                    };
+                    const options = {
+                       responsive: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: {
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'X',
+                                },
+                                min: 0,
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: isOneDimensional ? '' : 'Y',
+                                },
+                                min: isOneDimensional ? -1 : undefined,
+                                max: isOneDimensional ? 1 : undefined
+                            }
+                        }
+                    }
+                    const ctx = document.querySelector(".graphs").getContext("2d");
+                    new Chart(ctx, {
+                        type: 'scatter',
+                        data: data,
+                        options: options
+                    });
+                }
             }
         }
 
@@ -482,6 +588,9 @@
                     document.getElementById("tab-graphs").hidden = true;
                     document.getElementById("tabs").hidden = true;
                     document.getElementById("graphs").classList.remove("fg-muted");
+                    document.getElementById("train").innerHTML = "";
+                    document.getElementById("predict").innerHTML = "";
+                    document.getElementById("graphs").innerHTML = "<canvas class='graphs' id='canvas-graph'></canvas>";
                 }catch(err){
                     console.error(err);
                 }
@@ -514,13 +623,15 @@
             document.getElementById("buttons").hidden = false;
 
             document.getElementById("graphs").classList.remove("fg-muted");
+            document.getElementById("train").innerHTML = "";
+            document.getElementById("predict").innerHTML = "";
+            document.getElementById("graphs").innerHTML = "<canvas class='graphs' id='canvas-graph'></canvas>";
         });
 
         function getSelectedRegression() {
             const selects = document.querySelectorAll(".option");
             const values = {};
             selects.forEach(select => {
-                console.log("que pex",select.name, select.value)
                 values[select.name] = data_array[select.value];
             });
             console.log(values)
@@ -532,6 +643,15 @@
             const values = {};
             selects.forEach(select => {
                 values[select.name] = select.value;
+            });
+            return values;
+        }
+
+        function getSelectedKmeans() {
+            const selects = document.querySelectorAll(".kmeans-dimension:not([disabled])");
+            const values = [];
+            selects.forEach(select => {
+                values.push(select.value);
             });
             return values;
         }
@@ -671,8 +791,9 @@
                 return bayesTreeSelector(model,cols,data_array /*variable global*/)
             }else if (model === "nn"){
                 return neuralNetworkFormGenerator(model,cols);
+            }else if (model === "km"){
+                return kmeansSelector(model,cols);
             }
-
         }
 
         function regressionSelector(model,cols){
@@ -930,6 +1051,95 @@
             inputNumField.onchange();
             outputNumField.onchange();
             hiddenLayersField.onchange();
+
+            return formElements;
+        }
+
+        function kmeansSelector(model,cols){
+
+            let formElements = [];
+
+            // Bloque para seleccionar el número de Inputs y Outputs
+            const configContainer = document.createElement("div");
+
+            const inputNumLabel = document.createElement("label");
+            inputNumLabel.setAttribute("for", "numDimensions");
+            inputNumLabel.textContent = "Dimensiones:";
+            const inputNumField = document.createElement("input");
+            inputNumField.setAttribute("type", "number");
+            inputNumField.setAttribute("min", "1");
+            inputNumField.setAttribute("max", "2");
+            inputNumField.setAttribute("value","1");
+            inputNumField.setAttribute("id", "numDimensions");
+                       
+            inputNumField.onchange = () => generateInputSelectors();
+
+            configContainer.appendChild(inputNumLabel);
+            configContainer.appendChild(inputNumField);
+            formElements.push(configContainer);
+
+            //const inputSelectorsContainer = document.createElement("div");
+            //formElements.push(inputSelectorsContainer);
+
+            for (let i = 1; i <= 2; i++) {
+                const label = document.createElement("label");
+                label.textContent = ` Dimension ${i}:`;
+                const select = document.createElement("select");
+                select.setAttribute("name", `dimension-${i}`);
+                select.setAttribute("id", `dimension-${i}`);
+                select.setAttribute("class", `kmeans-dimension`);
+                select.disabled = i == 2;
+                let cnt = 0;
+                cols.forEach(col => {
+                    let option = document.createElement("option");
+                    option.value = col;
+                    option.text = col;
+                    option.selected = cnt === (i-1);
+                    cnt++;
+                    select.appendChild(option);
+                });
+                const container = document.createElement("div");
+                container.appendChild(label);
+                container.appendChild(select);
+                //inputSelectorsContainer.appendChild(container);
+                formElements.push(container);
+            }
+
+            function generateInputSelectors() {
+                const numInputs = inputNumField.value;
+                if (numInputs == 2){
+                    document.getElementById("dimension-2").disabled = false;
+                }else{
+                    document.getElementById("dimension-2").disabled = true;
+                }
+
+            }
+
+            const clusterNumContainer = document.createElement("div");
+            const clusterNumLabel = document.createElement("label");
+            clusterNumLabel.setAttribute("for", "numClusters");
+            clusterNumLabel.textContent = "Número de Clusters";
+            clusterNumField = document.createElement("input");
+            clusterNumField.setAttribute("type", "number");
+            clusterNumField.setAttribute("min", "1");
+            clusterNumField.setAttribute("value", "3");
+            clusterNumField.setAttribute("id","numClusters");
+            clusterNumContainer.appendChild(clusterNumLabel);
+            clusterNumContainer.appendChild(clusterNumField);
+            formElements.push(clusterNumContainer);
+
+            const iterationsContainer = document.createElement("div");
+            const iterationsLabel = document.createElement("label");
+            iterationsLabel.setAttribute("for", "numIterations");
+            iterationsLabel.textContent = "Número de Iteraciones";
+            const iterationsField = document.createElement("input");
+            iterationsField.setAttribute("type", "number");
+            iterationsField.setAttribute("min", "1");
+            iterationsField.setAttribute("value", "3");
+            iterationsField.setAttribute("id", "numIterations");
+            iterationsContainer.appendChild(iterationsLabel);
+            iterationsContainer.appendChild(iterationsField);
+            formElements.push(iterationsContainer);
 
             return formElements;
         }
