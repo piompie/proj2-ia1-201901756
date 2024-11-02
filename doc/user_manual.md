@@ -3,7 +3,6 @@
 ## Tabla de Contenidos
 - [Introducción](#introducción)
 - [Requisitos](#requisitos)
-- [Navegación de la Interfaz](#navegación-de-la-interfaz)
 - [Flujo de Trabajo](#flujo-de-trabajo)
    - [Carga de Datos](#carga-de-datos)
    - [Selección del Modelo](#selección-del-modelo)
@@ -19,10 +18,6 @@ Esta sección ofrece una visión general de la aplicación, su propósito y los 
 
 - Navegador de internet (Firefox, Chrome y variantes).
 - Conexión a Internet para cargar las bibliotecas externas.
-
-## Navegación de la Interfaz
-
-    ![panel-de-configuracion](./img/5.png)
 
 ## Flujo de Trabajo
 
